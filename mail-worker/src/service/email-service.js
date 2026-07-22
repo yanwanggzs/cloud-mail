@@ -928,8 +928,10 @@ const emailService = {
 	},
 
 	async completeReceiveAll(c) {
-		await c.env.db.prepare(`UPDATE email as e SET status = ${emailConst.status.RECEIVE} WHERE status = ${emailConst.status.SAVING} AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)`).run();
-		await c.env.db.prepare(`UPDATE email as e SET status = ${emailConst.status.NOONE} WHERE status = ${emailConst.status.SAVING} AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)`).run();
+		// Also force is_del=0: receive path inserts as deleted+SAVING, then completeReceive marks normal.
+		// If the worker dies mid-receive, cron must unstick both status AND is_del or public/emailList(isDel=0) never sees the mail.
+		await c.env.db.prepare(`UPDATE email as e SET status = ${emailConst.status.RECEIVE}, is_del = ${isDel.NORMAL} WHERE status = ${emailConst.status.SAVING} AND EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)`).run();
+		await c.env.db.prepare(`UPDATE email as e SET status = ${emailConst.status.NOONE}, is_del = ${isDel.NORMAL} WHERE status = ${emailConst.status.SAVING} AND NOT EXISTS (SELECT 1 FROM account WHERE account_id = e.account_id)`).run();
 	},
 
 	async batchDelete(c, params) {
