@@ -19,8 +19,9 @@ const publicService = {
 
 	async emailList(c, params) {
 
-		let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel } = params
+		let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel, light } = params
 
+		// Always expose code/status for automation clients (registration bots).
 		const query = orm(c).select({
 				emailId: email.emailId,
 				sendEmail: email.sendEmail,
@@ -29,6 +30,8 @@ const publicService = {
 				toEmail: email.toEmail,
 				toName: email.toName,
 				type: email.type,
+				status: email.status,
+				code: email.code,
 				createTime: email.createTime,
 				content: email.content,
 				text: email.text,
@@ -51,7 +54,8 @@ const publicService = {
 		let conditions = []
 
 		if (toEmail) {
-			conditions.push(sql`${email.toEmail} COLLATE NOCASE LIKE ${toEmail}`)
+			// Exact case-insensitive match (LIKE without wildcards is easy to misread / break).
+			conditions.push(sql`lower(${email.toEmail}) = lower(${String(toEmail).trim()})`)
 		}
 
 		if (sendEmail) {
@@ -164,9 +168,19 @@ const publicService = {
 
 		await this.verifyUser(c, params)
 
+		// 先检查 KV 里是否已有有效 token，有则直接返回，避免多窗口并发时互相覆盖
+		const existingToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
+		if (existingToken) {
+			return { token: existingToken }
+		}
+
 		const uuid = uuidv4();
 
-		await c.env.kv.put(KvConst.PUBLIC_KEY, uuid);
+		// 设置 1 小时 TTL，过期后自动失效，下次调用重新生成
+		await c.env.kv.put(KvConst.PUBLIC_KEY, uuid, { expirationTtl: 60 * 60 });
+
+		// 等待 KV 全局同步（Cloudflare KV 最终一致性，写入后需短暂等待）
+		await new Promise(resolve => setTimeout(resolve, 300));
 
 		return {token: uuid}
 	},
