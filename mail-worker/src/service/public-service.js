@@ -17,192 +17,192 @@ import KvConst from '../const/kv-const';
 
 const publicService = {
 
-	async emailList(c, params) {
+  async emailList(c, params) {
 
-		let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel, light } = params
+    let { toEmail, content, subject, sendName, sendEmail, timeSort, num, size, type , isDel, light } = params
 
-		// Always expose code/status for automation clients (registration bots).
-		const query = orm(c).select({
-				emailId: email.emailId,
-				sendEmail: email.sendEmail,
-				sendName: email.name,
-				subject: email.subject,
-				toEmail: email.toEmail,
-				toName: email.toName,
-				type: email.type,
-				status: email.status,
-				code: email.code,
-				createTime: email.createTime,
-				content: email.content,
-				text: email.text,
-				isDel: email.isDel,
-		}).from(email)
+    // Always expose code/status for automation clients (registration bots).
+    const query = orm(c).select({
+        emailId: email.emailId,
+        sendEmail: email.sendEmail,
+        sendName: email.name,
+        subject: email.subject,
+        toEmail: email.toEmail,
+        toName: email.toName,
+        type: email.type,
+        status: email.status,
+        code: email.code,
+        createTime: email.createTime,
+        content: email.content,
+        text: email.text,
+        isDel: email.isDel,
+    }).from(email)
 
-		if (!size) {
-			size = 20
-		}
+    if (!size) {
+      size = 20
+    }
 
-		if (!num) {
-			num = 1
-		}
+    if (!num) {
+      num = 1
+    }
 
-		size = Number(size);
-		num = Number(num);
+    size = Number(size);
+    num = Number(num);
 
-		num = (num - 1) * size;
+    num = (num - 1) * size;
 
-		let conditions = []
+    let conditions = []
 
-		if (toEmail) {
-			// Exact case-insensitive match (LIKE without wildcards is easy to misread / break).
-			conditions.push(sql`lower(${email.toEmail}) = lower(${String(toEmail).trim()})`)
-		}
+    if (toEmail) {
+      // Exact case-insensitive match (LIKE without wildcards is easy to misread / break).
+      conditions.push(sql`lower(${email.toEmail}) = lower(${String(toEmail).trim()})`)
+    }
 
-		if (sendEmail) {
-			conditions.push(sql`${email.sendEmail} COLLATE NOCASE LIKE ${sendEmail}`)
-		}
+    if (sendEmail) {
+      conditions.push(sql`${email.sendEmail} COLLATE NOCASE LIKE ${sendEmail}`)
+    }
 
-		if (sendName) {
-			conditions.push(sql`${email.name} COLLATE NOCASE LIKE ${sendName}`)
-		}
+    if (sendName) {
+      conditions.push(sql`${email.name} COLLATE NOCASE LIKE ${sendName}`)
+    }
 
-		if (subject) {
-			conditions.push(sql`${email.subject} COLLATE NOCASE LIKE ${subject}`)
-		}
+    if (subject) {
+      conditions.push(sql`${email.subject} COLLATE NOCASE LIKE ${subject}`)
+    }
 
-		if (content) {
-			conditions.push(sql`${email.content} COLLATE NOCASE LIKE ${content}`)
-		}
+    if (content) {
+      conditions.push(sql`${email.content} COLLATE NOCASE LIKE ${content}`)
+    }
 
-		if (type || type === 0) {
-			conditions.push(eq(email.type, type))
-		}
+    if (type || type === 0) {
+      conditions.push(eq(email.type, type))
+    }
 
-		if (isDel || isDel === 0) {
-			conditions.push(eq(email.isDel, isDel))
-		}
+    if (isDel || isDel === 0) {
+      conditions.push(eq(email.isDel, isDel))
+    }
 
-		if (conditions.length === 1) {
-			query.where(...conditions)
-		} else if (conditions.length > 1) {
-			query.where(and(...conditions))
-		}
+    if (conditions.length === 1) {
+      query.where(...conditions)
+    } else if (conditions.length > 1) {
+      query.where(and(...conditions))
+    }
 
-		if (timeSort === 'asc') {
-			query.orderBy(asc(email.emailId));
-		} else {
-			query.orderBy(desc(email.emailId));
-		}
+    if (timeSort === 'asc') {
+      query.orderBy(asc(email.emailId));
+    } else {
+      query.orderBy(desc(email.emailId));
+    }
 
-		return query.limit(size).offset(num);
+    return query.limit(size).offset(num);
 
-	},
+  },
 
-	async addUser(c, params) {
-		const { list } = params;
+  async addUser(c, params) {
+    const { list } = params;
 
-		if (list.length === 0) return;
+    if (list.length === 0) return;
 
-		for (const emailRow of list) {
-			if (!verifyUtils.isEmail(emailRow.email)) {
-				throw new BizError(t('notEmail'));
-			}
+    for (const emailRow of list) {
+      if (!verifyUtils.isEmail(emailRow.email)) {
+        throw new BizError(t('notEmail'));
+      }
 
-			if (!c.env.domain.includes(emailUtils.getDomain(emailRow.email))) {
-				throw new BizError(t('notEmailDomain'));
-			}
+      if (!c.env.domain.includes(emailUtils.getDomain(emailRow.email))) {
+        throw new BizError(t('notEmailDomain'));
+      }
 
-			const { salt, hash } = await saltHashUtils.hashPassword(
-				emailRow.password || cryptoUtils.genRandomPwd()
-			);
+      const { salt, hash } = await saltHashUtils.hashPassword(
+        emailRow.password || cryptoUtils.genRandomPwd()
+      );
 
-			emailRow.salt = salt;
-			emailRow.hash = hash;
-		}
+      emailRow.salt = salt;
+      emailRow.hash = hash;
+    }
 
 
-		const activeIp = reqUtils.getIp(c);
-		const { os, browser, device } = reqUtils.getUserAgent(c);
-		const activeTime = dayjs().format('YYYY-MM-DD HH:mm:ss');
+    const activeIp = reqUtils.getIp(c);
+    const { os, browser, device } = reqUtils.getUserAgent(c);
+    const activeTime = dayjs().format('YYYY-MM-DD HH:mm:ss');
 
-		const roleList = await roleService.roleSelectUse(c);
-		const defRole = roleList.find(roleRow => roleRow.isDefault === roleConst.isDefault.OPEN);
+    const roleList = await roleService.roleSelectUse(c);
+    const defRole = roleList.find(roleRow => roleRow.isDefault === roleConst.isDefault.OPEN);
 
-		const userList = [];
+    const userList = [];
 
-		for (const emailRow of list) {
-			let { email, hash, salt, roleName } = emailRow;
-			let type = defRole.roleId;
+    for (const emailRow of list) {
+      let { email, hash, salt, roleName } = emailRow;
+      let type = defRole.roleId;
 
-			if (roleName) {
-				const roleRow = roleList.find(role => role.name === roleName);
-				type = roleRow ? roleRow.roleId : type;
-			}
+      if (roleName) {
+        const roleRow = roleList.find(role => role.name === roleName);
+        type = roleRow ? roleRow.roleId : type;
+      }
 
-			const userSql = `INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
-			VALUES ('${email}', '${hash}', '${salt}', '${type}', '${os}', '${browser}', '${activeIp}', '${activeIp}', '${device}', '${activeTime}', '${activeTime}')`
+      const userSql = `INSERT INTO user (email, password, salt, type, os, browser, active_ip, create_ip, device, active_time, create_time)
+      VALUES ('${email}', '${hash}', '${salt}', '${type}', '${os}', '${browser}', '${activeIp}', '${activeIp}', '${device}', '${activeTime}', '${activeTime}')`
 
-			const accountSql = `INSERT INTO account (email, name, user_id)
-			VALUES ('${email}', '${emailUtils.getName(email)}', 0);`;
+      const accountSql = `INSERT INTO account (email, name, user_id)
+      VALUES ('${email}', '${emailUtils.getName(email)}', 0);`;
 
-			userList.push(c.env.db.prepare(userSql));
-			userList.push(c.env.db.prepare(accountSql));
+      userList.push(c.env.db.prepare(userSql));
+      userList.push(c.env.db.prepare(accountSql));
 
-		}
+    }
 
-		userList.push(c.env.db.prepare(`UPDATE account SET user_id = (SELECT user_id FROM user WHERE user.email = account.email) WHERE user_id = 0;`))
+    userList.push(c.env.db.prepare(`UPDATE account SET user_id = (SELECT user_id FROM user WHERE user.email = account.email) WHERE user_id = 0;`))
 
-		try {
-			await c.env.db.batch(userList);
-		} catch (e) {
-			if(e.message.includes('SQLITE_CONSTRAINT')) {
-				throw new BizError(t('emailExistDatabase'))
-			} else {
-				throw e
-			}
-		}
+    try {
+      await c.env.db.batch(userList);
+    } catch (e) {
+      if(e.message.includes('SQLITE_CONSTRAINT')) {
+        throw new BizError(t('emailExistDatabase'))
+      } else {
+        throw e
+      }
+    }
 
-	},
+  },
 
-	async genToken(c, params) {
+  async genToken(c, params) {
 
-		await this.verifyUser(c, params)
+    await this.verifyUser(c, params)
 
-		// 先检查 KV 里是否已有有效 token，有则直接返回，避免多窗口并发时互相覆盖
-		const existingToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
-		if (existingToken) {
-			return { token: existingToken }
-		}
+    // 先检查 KV 里是否已有有效 token，有则直接返回，避免多窗口并发时互相覆盖
+    const existingToken = await c.env.kv.get(KvConst.PUBLIC_KEY);
+    if (existingToken) {
+      return { token: existingToken }
+    }
 
-		const uuid = uuidv4();
+    const uuid = uuidv4();
 
-		// 设置 1 小时 TTL，过期后自动失效，下次调用重新生成
-		await c.env.kv.put(KvConst.PUBLIC_KEY, uuid, { expirationTtl: 60 * 60 });
+    // 设置 1 小时 TTL，过期后自动失效，下次调用重新生成
+    await c.env.kv.put(KvConst.PUBLIC_KEY, uuid, { expirationTtl: 60 * 60 });
 
-		// 等待 KV 全局同步（Cloudflare KV 最终一致性，写入后需短暂等待）
-		await new Promise(resolve => setTimeout(resolve, 300));
+    // 等待 KV 全局同步（Cloudflare KV 最终一致性，写入后需短暂等待）
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-		return {token: uuid}
-	},
+    return {token: uuid}
+  },
 
-	async verifyUser(c, params) {
+  async verifyUser(c, params) {
 
-		const { email, password } = params
+    const { email, password } = params
 
-		const userRow = await userService.selectByEmailIncludeDel(c, email);
+    const userRow = await userService.selectByEmailIncludeDel(c, email);
 
-		if (email !== c.env.admin) {
-			throw new BizError(t('notAdmin'));
-		}
+    if (email !== c.env.admin) {
+      throw new BizError(t('notAdmin'));
+    }
 
-		if (!userRow || userRow.isDel === isDel.DELETE) {
-			throw new BizError(t('notExistUser'));
-		}
+    if (!userRow || userRow.isDel === isDel.DELETE) {
+      throw new BizError(t('notExistUser'));
+    }
 
-		if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password)) {
-			throw new BizError(t('IncorrectPwd'));
-		}
-	}
+    if (!await cryptoUtils.verifyPassword(password, userRow.salt, userRow.password)) {
+      throw new BizError(t('IncorrectPwd'));
+    }
+  }
 
 }
 
